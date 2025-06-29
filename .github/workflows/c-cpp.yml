@@ -22,4 +22,4 @@ jobs:
     - name: make
       run: make
     - name: valgrind
-      run: valgrind --error-exitcode=1 ./tocdo
+      run: valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./tocdo

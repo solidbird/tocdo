@@ -1,0 +1,3 @@
+[submodule "CLIH"]
+	path = CLIH
+	url = https://github.com/solidbird/CLIH.git

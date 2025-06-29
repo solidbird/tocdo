@@ -1,9 +1,9 @@
 .PHONY:all
-all: test tocdo
+all: tocdo
 
-.PHONY:test
-test: test.c
-	gcc $^ -o $@ -l curl
+#.PHONY:test
+#test: test.c
+#	gcc $^ -o $@ -l curl
 
 .PHONY:tocdo
 tocdo: tocdo.c config.c

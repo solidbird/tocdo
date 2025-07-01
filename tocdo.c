@@ -67,10 +67,8 @@ cli_list* arg_parser(int argc, char **argv){
 
 int main(int argc, char **argv){
 	cli_list *list = arg_parser(argc, argv);
+	config_tocdo *conf = config_init();	
 
-	config_tocdo conf = {0};
-	config_init(&conf);
-	
 	int res = cli_execute(list, argc, argv);
 	return !res;
 }

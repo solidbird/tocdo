@@ -15,6 +15,6 @@ typedef struct {
 
 void create_config_file(FILE *conf_fd);
 void load_config_file(config_tocdo *conf, char* config_path);
-void config_init(config_tocdo *conf);
+config_tocdo *config_init();
 
 #endif //CONFIG_H

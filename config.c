@@ -43,10 +43,13 @@ void load_config_file(config_tocdo *conf, char* config_path){
 		
 		for(int i = 0; i < sizeof(CONFIG_FIELD_NAMES) / sizeof(char*); i++){
 			if(strcmp(field, CONFIG_FIELD_NAMES[i])) continue;
+			char *new_line;
 			switch(i){
 				case 0: 
 					conf->todo_file_location = malloc(sizeof(conf->todo_file_location));
 					strncpy(conf->todo_file_location, value, strlen(value));
+					new_line = strchr(conf->todo_file_location, '\n');
+					if(new_line) *new_line = '\0';
 					break;
 				case 1:
 					conf->notifications_enabled = atoi(value);
@@ -54,18 +57,26 @@ void load_config_file(config_tocdo *conf, char* config_path){
 				case 2:
 					conf->notifications_filter = malloc(sizeof(conf->notifications_filter));
 					strncpy(conf->notifications_filter, value, strlen(value));
+					new_line = strchr(conf->notifications_filter, '\n');
+					if(new_line) *new_line = '\0';
 					break;
 				case 3:
 					conf->smtp_server = malloc(sizeof(conf->smtp_server));
 					strncpy(conf->smtp_server, value, strlen(value));
+					new_line = strchr(conf->smtp_server, '\n');
+					if(new_line) *new_line = '\0';
 					break;
 				case 4:
 					conf->smtp_username = malloc(sizeof(conf->smtp_username));
 					strncpy(conf->smtp_username, value, strlen(value));
+					new_line = strchr(conf->smtp_username, '\n');
+					if(new_line) *new_line = '\0';
 					break;
 				case 5:
 					conf->smtp_password = malloc(sizeof(conf->smtp_password));
 					strncpy(conf->smtp_password, value, strlen(value));
+					new_line = strchr(conf->smtp_password, '\n');
+					if(new_line) *new_line = '\0';
 					break;
 			}
 		}

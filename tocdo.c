@@ -15,6 +15,21 @@ void today_date_str(char *date_str){
 	strftime(date_str, 100, "%Y-%m-%d", tm_info);
 }
 
+int match_at(char *string, char *pattern, int *start, int *end){
+	int result;
+	regex_t reg;
+	regmatch_t match;
+
+	if(regcomp(&reg, pattern, REG_EXTENDED) != 0) return -1;
+	result = regexec(&reg, string, 1, &match, 0);
+	regfree(&reg);
+
+	*start = match.rm_so;
+	*end = match.rm_eo-1;
+
+	return result;
+}
+
 int match(char *string, char *pattern){
 	int result;
 	regex_t reg;
@@ -26,16 +41,80 @@ int match(char *string, char *pattern){
 	return result;
 }
 
-int parse_tocdo_entry(char **entries, size_t n){
-	if(!match(entries[0], "[0-9]{4}-[0-9]{2}-[0-9]{2}")){
-		today_date_str(entries[0]);
+char* parse_tocdo_done_task(char **entries, size_t n){
+	//TODO
+	return NULL;
+}
+
+void concat_word_entries(char *build_entry, char** entries, size_t start, size_t end){
+	for(size_t i = start; i < end; i++){
+		strncat(build_entry, entries[i], strlen(entries[i]));
+		if(i < end-1) strcat(build_entry, " ");
+	}
+}
+
+char* update_tocdo_entry_date(char **entries, size_t n){
+	char *done_pattern = "^(X|x)";
+	char *prio_pattern = "^(\\([A-Z]\\))";
+	char *date_pattern = "^([0-9]{4}-[0-9]{2}-[0-9]{2})";
+	// "x? (\([A-Z]\))? ([0-9]{4}-[0-9]{2}-[0-9]{2})? ([0-9]{4}-[0-9]{2}-[0-9]{2})? (.)*"
+	// ----------------------------------------------------------------------------------
+	// ^x									- 	done
+	// ^(\([A-Z]\))							- 	prio
+	// ([0-9]{4}-[0-9]{2}-[0-9]{2})?		- 	completion date
+	// ([0-9]{4}-[0-9]{2}-[0-9]{2})?		- 	creation date
+	// (.)*									-	description
+
+	int total_size = 20 + n;
+	for(size_t i = 0; i < n; i++){
+		total_size += strlen(entries[i]);
 	}
 
-	for(int i = 0; i < n; i++){
-		printf("[%s]", entries[i]);
+	char *build_entry = malloc(total_size);
+	char date[100] = {0};
+	today_date_str(date);
+
+	if(!match(entries[0], done_pattern)){
+		return parse_tocdo_done_task(entries, n);
 	}
-	printf("\n");
-	return 1;
+
+	if(!match(entries[0], date_pattern)){
+		today_date_str(date);
+		strncpy(build_entry, date, strlen(date));
+		if(n == 1){
+			strncat(build_entry, &entries[0][strlen(date)], strlen(entries[0])-strlen(date));
+		}else{
+			strcat(build_entry, " ");
+			concat_word_entries(build_entry, entries, 1, n);
+		}
+
+		return build_entry;
+	}
+
+	if(!match(entries[0], prio_pattern)){
+		strncpy(build_entry, entries[0], strlen("(X)"));
+		strcat(build_entry, " ");
+		strncat(build_entry, date, strlen(date));		
+		strcat(build_entry, " ");
+		if(n == 1){
+			int offset = strlen("(X)") + 1;
+			if(!match(&entries[0][offset], date_pattern)) offset += strlen(date) + 1; 
+			strncat(build_entry, &(entries[0][offset]), strlen(entries[0])-offset);
+		}else{
+			size_t start = 1;
+			if(!match(entries[1], date_pattern)) start++; 
+			concat_word_entries(build_entry, entries, start, n);
+		}
+
+		return build_entry;
+
+	}
+	
+	strncpy(build_entry, date, strlen(date));
+	strcat(build_entry, " ");
+	concat_word_entries(build_entry, entries, 0, n);
+
+	return build_entry;
 }
 
 void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
@@ -44,24 +123,17 @@ void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	char **entries = c->arg_head->result->ls;
 	size_t size = c->arg_head->item.type_block.n;
 	
-	if(parse_tocdo_entry(entries, size)){
+	char* todo_entry;
+	if(todo_entry = update_tocdo_entry_date(entries, size)){
 		char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
 		strcpy(todo_file, conf->todo_file_location);
 		strcat(todo_file, "/todo.txt");
 
-		//char date_str[100];
-		//today_date_str(date_str);
-
 		FILE *entry_file = fopen(todo_file, "a+");
-		//fwrite(date_str, sizeof(char), strlen(date_str), entry_file);
-		//fputc(' ', entry_file);
-
-		for(int i = 0; i < size; i++){
-			fwrite(entries[i], sizeof(char), strlen(entries[i]), entry_file);
-			if(i != size - 1) fputc(' ', entry_file);
-		}
+		fwrite(todo_entry, sizeof(char), strlen(todo_entry), entry_file);
 		fputc('\n', entry_file);
 	}
+	free(todo_entry);
 }
 
 void* del_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){

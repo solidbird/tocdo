@@ -53,6 +53,26 @@ void concat_word_entries(char *build_entry, char** entries, size_t start, size_t
 	}
 }
 
+void prio_key_update(char *build_entry, size_t n){
+	char *special_tag_pattern = "((prio)\\:([A-Z])+)";
+	char *token_context;
+	char *tmp = malloc(strlen(build_entry));
+	char *tmp_cut = malloc(strlen(build_entry));	
+
+	int s = 0, e = 0;
+	strcpy(tmp_cut, build_entry);
+	if(!match_at(build_entry, special_tag_pattern, &s, &e)){
+		char *prio_value = strtok_r(build_entry + s, ": ", &token_context);
+		prio_value = strtok_r(NULL, ": ", &token_context);
+
+		strcpy(tmp_cut + s, token_context);
+		sprintf(tmp, "(%c) %s", prio_value[0], tmp_cut);
+		strcpy(build_entry, tmp);
+		free(tmp);
+		free(tmp_cut);
+	}
+}
+
 char* update_tocdo_entry_date(char **entries, size_t n){
 	char *done_pattern = "^(X|x)";
 	char *prio_pattern = "^(\\([A-Z]\\))";
@@ -125,6 +145,7 @@ void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	
 	char* todo_entry;
 	if(todo_entry = update_tocdo_entry_date(entries, size)){
+		prio_key_update(todo_entry, size);
 		char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
 		strcpy(todo_file, conf->todo_file_location);
 		strcat(todo_file, "/todo.txt");
@@ -195,5 +216,8 @@ int main(int argc, char **argv){
 	cli_list *list = arg_parser(argc, argv, conf);
 
 	int res = cli_execute(list, argc, argv);
+	if(!res){
+		fprintf(stderr, "FAIL");
+	}
 	return !res;
 }

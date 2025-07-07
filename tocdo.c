@@ -62,6 +62,7 @@ void due_key_update(char *build_entry){
 	char *token_context;
 	char *tmp = malloc(strlen(build_entry));
 	char *tmp_cut = malloc(strlen(build_entry));	
+	char *build_entry_cut_end = malloc(strlen(build_entry));
 
 	int s = 0, e = 0;
 	char *build_tmp = malloc(strlen(build_entry));
@@ -102,7 +103,7 @@ void due_key_update(char *build_entry){
 		//TODO: make  and put that at the place where
 		//the due:... dotted value should be. Replace it.
 		today_date_str(transform_date, y, m, d);
-		char *build_entry_cut_end = malloc(strlen(build_entry));
+		build_entry_cut_end = malloc(strlen(build_entry));
 		memset(build_entry_cut_end, 0, strlen(build_entry));
 		if(build_entry[e + 1] != '\0'){
 			strncpy(build_entry_cut_end, build_entry + e + 1, strlen(build_entry + e + 1));
@@ -114,6 +115,8 @@ void due_key_update(char *build_entry){
 	}
 	free(tmp);
 	free(tmp_cut);
+	free(build_tmp);
+	free(build_entry_cut_end);
 }
 
 void prio_key_update(char *build_entry, size_t n){

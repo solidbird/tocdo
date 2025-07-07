@@ -6,12 +6,16 @@
 #define CLI_IMPLEMENTATION
 #include "CLIH/CLI.h"
 
-void today_date_str(char *date_str){
+void today_date_str(char *date_str, int delta_year, int delta_month, int delta_day){
 	time_t now;
 	struct tm *tm_info;
 
 	time(&now);
 	tm_info = localtime(&now);
+	tm_info->tm_year+=delta_year;
+	tm_info->tm_mon+=delta_month;
+	tm_info->tm_mday+=delta_day;
+	mktime(tm_info);
 	strftime(date_str, 100, "%Y-%m-%d", tm_info);
 }
 
@@ -51,6 +55,65 @@ void concat_word_entries(char *build_entry, char** entries, size_t start, size_t
 		strncat(build_entry, entries[i], strlen(entries[i]));
 		if(i < end-1) strcat(build_entry, " ");
 	}
+}
+
+void due_key_update(char *build_entry){
+	char *special_tag_pattern = "((due)\\:([0-9])+([d|w|m|y])(,([0-9])+([d|w|m|y]))*)";
+	char *token_context;
+	char *tmp = malloc(strlen(build_entry));
+	char *tmp_cut = malloc(strlen(build_entry));	
+
+	int s = 0, e = 0;
+	char *build_tmp = malloc(strlen(build_entry));
+	strcpy(tmp_cut, build_entry);
+	strcpy(build_tmp, build_entry);
+	if(!match_at(build_tmp, special_tag_pattern, &s, &e)){
+		char *due_value = strtok_r(build_tmp + s, ": ", &token_context);
+		due_value = strtok_r(NULL, ": ", &token_context);
+
+		strcpy(tmp_cut + s, token_context);
+		char *token_context_within;
+		char *due_value_within = strtok_r(due_value, ",", &token_context_within);
+		char transform_date[100] = {0};
+		int y = 0, m = 0, d = 0;
+		while(due_value_within != NULL){
+			char time_suffix = due_value_within[strlen(due_value_within)-1];
+			due_value_within[strlen(due_value_within)-1] = '\0';
+
+			switch(time_suffix){
+				case 'd':
+					d += atoi(due_value_within);
+				break;
+				case 'w':
+					d += (atoi(due_value_within)) * 7;
+				break;
+				case 'm':
+					m += atoi(due_value_within);
+				break;
+				case 'y':
+					y += atoi(due_value_within);
+				break;
+				default:
+				break;
+			}	
+			due_value_within = strtok_r(NULL, ",", &token_context_within);
+		}
+
+		//TODO: make  and put that at the place where
+		//the due:... dotted value should be. Replace it.
+		today_date_str(transform_date, y, m, d);
+		char *build_entry_cut_end = malloc(strlen(build_entry));
+		memset(build_entry_cut_end, 0, strlen(build_entry));
+		if(build_entry[e + 1] != '\0'){
+			strncpy(build_entry_cut_end, build_entry + e + 1, strlen(build_entry + e + 1));
+		}
+		strncpy(build_entry + s + 4, transform_date, strlen(transform_date));
+		build_entry[s + 4 + strlen(transform_date)] = '\0';
+		strncat(build_entry, build_entry_cut_end, strlen(build_entry_cut_end));
+		//strcpy(build_entry, tmp);
+	}
+	free(tmp);
+	free(tmp_cut);
 }
 
 void prio_key_update(char *build_entry, size_t n){
@@ -93,7 +156,7 @@ char* update_tocdo_entry_date(char **entries, size_t n){
 	char *build_entry = malloc(total_size);
 	char *build_entry_tmp = malloc(total_size);
 	char date[100] = {0};
-	today_date_str(date);
+	today_date_str(date,0,0,0);
 	concat_word_entries(build_entry_tmp, entries, 0, n);
 
 	if(!match(build_entry_tmp, done_pattern)){
@@ -101,7 +164,6 @@ char* update_tocdo_entry_date(char **entries, size_t n){
 	}
 
 	if(!match(build_entry_tmp, date_pattern)){
-		today_date_str(date);
 		strncpy(build_entry, date, strlen(date));
 		strncat(build_entry, &build_entry_tmp[strlen(date)], strlen(build_entry_tmp)-strlen(date));
 
@@ -137,6 +199,7 @@ void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	char* todo_entry;
 	if(todo_entry = update_tocdo_entry_date(entries, size)){
 		prio_key_update(todo_entry, size);
+		due_key_update(todo_entry);
 		char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
 		strcpy(todo_file, conf->todo_file_location);
 		strcat(todo_file, "/todo.txt");

@@ -68,9 +68,9 @@ void prio_key_update(char *build_entry, size_t n){
 		strcpy(tmp_cut + s, token_context);
 		sprintf(tmp, "(%c) %s", prio_value[0], tmp_cut);
 		strcpy(build_entry, tmp);
-		free(tmp);
-		free(tmp_cut);
 	}
+	free(tmp);
+	free(tmp_cut);
 }
 
 char* update_tocdo_entry_date(char **entries, size_t n){
@@ -91,43 +91,34 @@ char* update_tocdo_entry_date(char **entries, size_t n){
 	}
 
 	char *build_entry = malloc(total_size);
+	char *build_entry_tmp = malloc(total_size);
 	char date[100] = {0};
 	today_date_str(date);
+	concat_word_entries(build_entry_tmp, entries, 0, n);
 
-	if(!match(entries[0], done_pattern)){
+	if(!match(build_entry_tmp, done_pattern)){
 		return parse_tocdo_done_task(entries, n);
 	}
 
-	if(!match(entries[0], date_pattern)){
+	if(!match(build_entry_tmp, date_pattern)){
 		today_date_str(date);
 		strncpy(build_entry, date, strlen(date));
-		if(n == 1){
-			strncat(build_entry, &entries[0][strlen(date)], strlen(entries[0])-strlen(date));
-		}else{
-			strcat(build_entry, " ");
-			concat_word_entries(build_entry, entries, 1, n);
-		}
+		strncat(build_entry, &build_entry_tmp[strlen(date)], strlen(build_entry_tmp)-strlen(date));
 
 		return build_entry;
 	}
 
-	if(!match(entries[0], prio_pattern)){
-		strncpy(build_entry, entries[0], strlen("(X)"));
+	if(!match(build_entry_tmp, prio_pattern)){
+		strncpy(build_entry, build_entry_tmp, strlen("(X)"));
 		strcat(build_entry, " ");
 		strncat(build_entry, date, strlen(date));		
 		strcat(build_entry, " ");
-		if(n == 1){
-			int offset = strlen("(X)") + 1;
-			if(!match(&entries[0][offset], date_pattern)) offset += strlen(date) + 1; 
-			strncat(build_entry, &(entries[0][offset]), strlen(entries[0])-offset);
-		}else{
-			size_t start = 1;
-			if(!match(entries[1], date_pattern)) start++; 
-			concat_word_entries(build_entry, entries, start, n);
-		}
+
+		int offset = strlen("(X)") + 1;
+		if(!match(&build_entry_tmp[offset], date_pattern)) offset += strlen(date) + 1; 
+		strncat(build_entry, &(build_entry_tmp[offset]), strlen(build_entry_tmp)-offset);
 
 		return build_entry;
-
 	}
 	
 	strncpy(build_entry, date, strlen(date));

@@ -19,7 +19,7 @@ void today_date_str(char *date_str, int delta_year, int delta_month, int delta_d
 	strftime(date_str, 100, "%Y-%m-%d", tm_info);
 }
 
-int match_at(char *string, char *pattern, int *start, int *end){
+int match_at(char *string, const char *pattern, int *start, int *end){
 	int result;
 	regex_t reg;
 	regmatch_t match;
@@ -34,7 +34,7 @@ int match_at(char *string, char *pattern, int *start, int *end){
 	return result;
 }
 
-int match(char *string, char *pattern){
+int match(char *string, const char *pattern){
 	int result;
 	regex_t reg;
 
@@ -58,7 +58,7 @@ void concat_word_entries(char *build_entry, char** entries, size_t start, size_t
 }
 
 void due_key_update(char *build_entry){
-	char *special_tag_pattern = "((due)\\:([0-9])+([d|w|m|y])(,([0-9])+([d|w|m|y]))*)";
+	const char *due_tag_pattern = "((due)\\:([0-9])+([d|w|m|y])(,([0-9])+([d|w|m|y]))*)";
 	char *token_context;
 	char *tmp = malloc(strlen(build_entry));
 	char *tmp_cut = malloc(strlen(build_entry));	
@@ -68,7 +68,7 @@ void due_key_update(char *build_entry){
 	char *build_tmp = malloc(strlen(build_entry));
 	strcpy(tmp_cut, build_entry);
 	strcpy(build_tmp, build_entry);
-	if(!match_at(build_tmp, special_tag_pattern, &s, &e)){
+	if(!match_at(build_tmp, due_tag_pattern, &s, &e)){
 		char *due_value = strtok_r(build_tmp + s, ": ", &token_context);
 		due_value = strtok_r(NULL, ": ", &token_context);
 
@@ -119,8 +119,8 @@ void due_key_update(char *build_entry){
 	free(build_entry_cut_end);
 }
 
-void prio_key_update(char *build_entry, size_t n){
-	char *special_tag_pattern = "((prio)\\:([A-Z])+)";
+void prio_key_update(char *build_entry){
+	const char *special_tag_pattern = "((prio)\\:([A-Z])+)";
 	char *token_context;
 	char *tmp = malloc(strlen(build_entry));
 	char *tmp_cut = malloc(strlen(build_entry));	
@@ -140,9 +140,9 @@ void prio_key_update(char *build_entry, size_t n){
 }
 
 char* update_tocdo_entry_date(char **entries, size_t n){
-	char *done_pattern = "^(X|x)";
-	char *prio_pattern = "^(\\([A-Z]\\))";
-	char *date_pattern = "^([0-9]{4}-[0-9]{2}-[0-9]{2})";
+	const char *done_pattern = "^(X|x)";
+	const char *prio_pattern = "^(\\([A-Z]\\))";
+	const char *date_pattern = "^([0-9]{4}-[0-9]{2}-[0-9]{2})";
 	// "x? (\([A-Z]\))? ([0-9]{4}-[0-9]{2}-[0-9]{2})? ([0-9]{4}-[0-9]{2}-[0-9]{2})? (.)*"
 	// ----------------------------------------------------------------------------------
 	// ^x									- 	done
@@ -201,7 +201,7 @@ void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	
 	char* todo_entry;
 	if(todo_entry = update_tocdo_entry_date(entries, size)){
-		prio_key_update(todo_entry, size);
+		prio_key_update(todo_entry);
 		due_key_update(todo_entry);
 		char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
 		strcpy(todo_file, conf->todo_file_location);

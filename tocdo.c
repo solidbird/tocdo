@@ -6,6 +6,13 @@
 #define CLI_IMPLEMENTATION
 #include "CLIH/CLI.h"
 
+typedef struct file_offset_list {
+	int index;
+	long file_offset;
+	struct file_offset_list *next;
+	struct file_offset_list *prev;
+} file_offset_list;
+
 void today_date_str(char *date_str, int delta_year, int delta_month, int delta_day){
 	time_t now;
 	struct tm *tm_info;
@@ -194,7 +201,7 @@ char* update_tocdo_entry_date(char **entries, size_t n){
 }
 
 void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
-	config_tocdo *conf = (config_tocdo *)void_args;
+	FILE *entry_file = (FILE *)void_args;
 	
 	char **entries = c->arg_head->result->ls;
 	size_t size = c->arg_head->item.type_block.n;
@@ -203,11 +210,7 @@ void* add_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	if(todo_entry = update_tocdo_entry_date(entries, size)){
 		prio_key_update(todo_entry);
 		due_key_update(todo_entry);
-		char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
-		strcpy(todo_file, conf->todo_file_location);
-		strcat(todo_file, "/todo.txt");
 
-		FILE *entry_file = fopen(todo_file, "a+");
 		fwrite(todo_entry, sizeof(char), strlen(todo_entry), entry_file);
 		fputc('\n', entry_file);
 	}
@@ -228,11 +231,96 @@ void* edit_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	printf("\n");
 }
 
-void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
-	for(int i = 0; i < c->arg_head->item.type_block.n; i++){
-		printf("[%s]", c->arg_head->result->ls[i]);
+int del_file_offset(file_offset_list **fol_head, int index){
+	file_offset_list *tmp = (*fol_head);
+	while(tmp != NULL){
+		if(tmp->index != index){
+			tmp = tmp->next;
+			continue;
+		}
+
+		//TODO: if node alone make just delete, if only prev null set the next prev to null, if only next null etc...
+
+		if(tmp->prev){
+			tmp->prev->next = tmp->next;
+		}else{
+			*fol_head = tmp->next;
+		}
+		if(tmp->next) tmp->next->prev = tmp->prev;
+		free(tmp);
+		return 1;
 	}
-	printf("\n");
+	return 0;
+}
+
+void add_file_offset(file_offset_list **fol_head, FILE *todo_file){
+	if((*fol_head) == NULL){
+		(*fol_head) = malloc(sizeof(file_offset_list));
+		(*fol_head)->index = 1;
+		(*fol_head)->file_offset = ftell(todo_file);
+		(*fol_head)->next = NULL;
+		(*fol_head)->prev = NULL;
+	}else{
+		file_offset_list *tmp = (*fol_head);
+		while(tmp->next != NULL){
+			(tmp) = (tmp)->next;
+		}
+		(tmp)->next = malloc(sizeof(file_offset_list));
+		(tmp)->next->file_offset = ftell(todo_file);
+		(tmp)->next->index = (tmp)->index + 1;
+		(tmp)->next->prev = (tmp);
+	}
+}
+
+void print_file_offset(file_offset_list *fol, FILE *todo_file){
+	file_offset_list *tmp = fol;
+	while(tmp != NULL){
+		fseek(todo_file, tmp->file_offset, SEEK_SET);
+		char read;
+		printf("[%d] ", tmp->index);
+		while((read = fgetc(todo_file)) != EOF){
+			printf("%c", read);
+			if(read == '\n') break;
+		}
+		tmp = tmp->next;
+	}
+}
+
+void filter_str_file_offset(file_offset_list **fol_head, FILE *file, char *str_filter){
+	file_offset_list *tmp = (*fol_head);
+	char read;
+	while(tmp != NULL){
+		int buffer_size = 1;
+		char *build_line = malloc(buffer_size);
+		fseek(file, tmp->file_offset, SEEK_SET);
+		while((read = fgetc(file)) != EOF){
+			if(read == '\n') break;
+			build_line[buffer_size - 1] = read;
+			build_line = realloc(build_line, ++buffer_size);
+		}
+		if(match(build_line, str_filter)) del_file_offset(fol_head, tmp->index);
+		//if(!strstr(build_line, str_filter)) del_file_offset(fol_head, tmp->index);
+		memset(build_line, 0, buffer_size);
+		free(build_line);
+		tmp = tmp->next;
+	}
+}
+
+void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
+	//TODO: allow filter with expr and sort options
+	FILE *todo_file = (FILE*) void_args;
+	char file_chr;
+	file_offset_list *fol = NULL;
+
+	while((file_chr = fgetc(todo_file)) != EOF){
+		if(file_chr != '\n') continue;
+		add_file_offset(&fol, todo_file);
+	}
+
+	cli_opt_list *search_opt = find_opt_name(c->opt_head, "--search");
+	if(search_opt->result) filter_str_file_offset(&fol, todo_file, search_opt->result->s);
+	rewind(todo_file);
+	print_file_offset(fol, todo_file);
 }
 
 void* configurate_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
@@ -242,7 +330,7 @@ void* configurate_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	printf("\n");
 }
 
-cli_list* arg_parser(int argc, char **argv, config_tocdo *conf){
+cli_list* arg_parser(int argc, char **argv, config_tocdo *conf, FILE *todo_file){
 	char* program_descr = "CLI Tool for todo.txt implementation";
 	cli_list *list = cli_init(program_descr, NULL);
 	cli_cmd_group *main = list->opt_arg_grp;
@@ -250,7 +338,7 @@ cli_list* arg_parser(int argc, char **argv, config_tocdo *conf){
 	//cli_set_default(*main, "--file", (cli_result) "~/todo.txt");
 
 	char *help_cg_add[2] = {"-H", "--HELP"};
-	cli_cmd_group *cg_add = cli_add_cmd_grp(list, "add", "Add todo entry.", help_cg_add, add_tocdo, conf);
+	cli_cmd_group *cg_add = cli_add_cmd_grp(list, "add", "Add todo entry.", help_cg_add, add_tocdo, todo_file);
 	cli_grp_add_arg(cg_add, (cli_arg_item){"TODO_ENTRY", "Todo entry which should be added to the todo.txt file.", STRING, -1, 1});
 
 	cli_cmd_group *cg_del = cli_add_cmd_grp(list, "del", "Delete todo entry.", NULL, del_tocdo, NULL);
@@ -259,8 +347,9 @@ cli_list* arg_parser(int argc, char **argv, config_tocdo *conf){
 	cli_cmd_group *cg_edit = cli_add_cmd_grp(list, "edit", "Edit", NULL, edit_tocdo, NULL);
 	cli_grp_add_arg(cg_edit, (cli_arg_item){"TODO_ENTRY", "Edit", STRING, -1, 1});
 
-	cli_cmd_group *cg_show = cli_add_cmd_grp(list, "show", "Show", NULL, show_tocdo, NULL);
-	cli_grp_add_arg(cg_show, (cli_arg_item){"TODO_ENTRY", "Show", STRING, -1, 1});
+	//FILE *entry_file = fopen("/home/ich/todo.txt", "r");
+	cli_cmd_group *cg_show = cli_add_cmd_grp(list, "show", "Show", NULL, show_tocdo, todo_file);
+	cli_grp_add_opt(cg_show, (cli_opt_item){"-s", "--search", "Search string within the todos.", STRING, 0, 0});
 
 	cli_cmd_group *cg_config = cli_add_cmd_grp(list, "config", "Config", NULL, configurate_tocdo, NULL);
 	cli_grp_add_arg(cg_config, (cli_arg_item){"TODO_ENTRY", "Config", STRING, -1, 1});
@@ -270,7 +359,12 @@ cli_list* arg_parser(int argc, char **argv, config_tocdo *conf){
 
 int main(int argc, char **argv){
 	config_tocdo *conf = config_init();	
-	cli_list *list = arg_parser(argc, argv, conf);
+	char *todo_file = malloc(strlen(conf->todo_file_location) + strlen("/todo.txt"));
+	strcpy(todo_file, conf->todo_file_location);
+	strcat(todo_file, "/todo.txt");
+	FILE *entry_file = fopen(todo_file, "a+");
+
+	cli_list *list = arg_parser(argc, argv, conf, entry_file);
 
 	int res = cli_execute(list, argc, argv);
 	if(!res){

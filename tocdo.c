@@ -152,11 +152,11 @@ char* update_tocdo_entry_date(char **entries, size_t n){
 	const char *date_pattern = "^([0-9]{4}-[0-9]{2}-[0-9]{2})";
 	// "x? (\([A-Z]\))? ([0-9]{4}-[0-9]{2}-[0-9]{2})? ([0-9]{4}-[0-9]{2}-[0-9]{2})? (.)*"
 	// ----------------------------------------------------------------------------------
-	// ^x									- 	done
-	// ^(\([A-Z]\))							- 	prio
+	// ^x						- 	done
+	// ^(\([A-Z]\))					- 	prio
 	// ([0-9]{4}-[0-9]{2}-[0-9]{2})?		- 	completion date
 	// ([0-9]{4}-[0-9]{2}-[0-9]{2})?		- 	creation date
-	// (.)*									-	description
+	// (.)*						-	description
 
 	int total_size = 20 + n;
 	for(size_t i = 0; i < n; i++){
@@ -306,6 +306,65 @@ void filter_str_file_offset(file_offset_list **fol_head, FILE *file, char *str_f
 	}
 }
 
+typedef enum {
+	DUE,
+	PRIO
+} KEY_TOKEN;
+
+typedef enum {
+	LT,
+	LE,
+	EQ,
+	NQ,
+	GT,
+	GE
+} COMP_OP;
+
+typedef struct {
+	KEY_TOKEN *kt;
+	COMP_OP *at;
+	char *value;
+} expr_word;
+
+void filter_expr_file_offset(file_offset_list **fol_head, FILE *file, char *expr_filter){
+	// * Parse expr
+	// ** Tokenize and take values of
+	// ** If for example token 'DUE' and 'LT' found then use the value that is next to it and
+	// start running a function for it
+
+	/*
+ 	* Build dynamic list of these 
+ 	*/
+
+	//-fe "due>=3d|prio<B"
+	//-fe "due>=3d | prio<C & test=123 | a<123 | c=1"
+	// strtokr() -->
+	// 
+	// {due>=3d} |
+	// {prio<C, test=123} &
+	// {a=123} |
+	// {c=1}
+
+	char *copy = strdup(expr_filter);
+	char *str = expr_filter;
+	char *del = "|&";
+	char *saveptr;
+	char last_del = 0;
+	char *subtoken = strtok_r(str, del, &saveptr);
+	for(;subtoken != NULL;){
+		char found_del = copy[subtoken-expr_filter+strlen(subtoken)];
+		if(found_del == '&'){
+			printf(" and neighbor %s\n", subtoken);	
+		}else if(found_del == '|'){
+			printf(" or neighbor %s\n", subtoken);
+		}else{
+			printf("%c -> %s\n", last_del, subtoken);
+		}
+		last_del = found_del;
+		subtoken = strtok_r(NULL, del, &saveptr);
+	}
+}
+
 void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	//TODO: allow filter with expr and sort options
 	FILE *todo_file = (FILE*) void_args;
@@ -318,9 +377,14 @@ void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 	}
 
 	cli_opt_list *search_opt = find_opt_name(c->opt_head, "--search");
+	cli_opt_list *filterexpr_opt = find_opt_name(c->opt_head, "--filterexpr");
 	if(search_opt->result) filter_str_file_offset(&fol, todo_file, search_opt->result->s);
+	if(filterexpr_opt->result) filter_expr_file_offset(&fol, todo_file, filterexpr_opt->result->s);
+	// --filterexp "due>=3d|prio<B"
+
 	rewind(todo_file);
 	print_file_offset(fol, todo_file);
+
 }
 
 void* configurate_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
@@ -350,6 +414,7 @@ cli_list* arg_parser(int argc, char **argv, config_tocdo *conf, FILE *todo_file)
 	//FILE *entry_file = fopen("/home/ich/todo.txt", "r");
 	cli_cmd_group *cg_show = cli_add_cmd_grp(list, "show", "Show", NULL, show_tocdo, todo_file);
 	cli_grp_add_opt(cg_show, (cli_opt_item){"-s", "--search", "Search string within the todos.", STRING, 0, 0});
+	cli_grp_add_opt(cg_show, (cli_opt_item){"-fe", "--filterexpr", "Filter entries by expresions.", STRING, 0, 0});
 
 	cli_cmd_group *cg_config = cli_add_cmd_grp(list, "config", "Config", NULL, configurate_tocdo, NULL);
 	cli_grp_add_arg(cg_config, (cli_arg_item){"TODO_ENTRY", "Config", STRING, -1, 1});

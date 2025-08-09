@@ -326,43 +326,166 @@ typedef struct {
 	char *value;
 } expr_word;
 
+typedef struct sublist_entries {
+	char *entries;
+	struct sublist_entries *next;
+	struct sublist_entries *prev;
+} sublist_entries;
+
+sublist_entries* init_sublist_entries(){
+	sublist_entries *head = malloc(sizeof(sublist_entries));
+	head->next = head;
+	head->prev = head;
+	return head;
+}
+
+char* due_process(char *expr_comp, char *expr_value, char *entries){
+	if(!strcmp(">", expr_comp)) {
+
+	} else if(!strcmp("<", expr_comp)) {
+
+	} else if(!strcmp("=", expr_comp)) {
+
+	} else if(!strcmp(">=", expr_comp)) {
+	
+	} else if(!strcmp("<=", expr_comp)) {
+	
+	} else if(!strcmp("!=", expr_comp)) {
+	
+	}
+}
+char* prio_process(char *expr_comp, char *expr_value, char *entries){}
+
+typedef struct key_func_map {
+	char *name;
+	char* (*func)(char *expr_comp, char *expr_value, char *entries);
+} key_func_map;
+
+const key_func_map keys[] = {
+	(key_func_map){
+		"due",
+		due_process
+	},
+	(key_func_map){
+		"prio",
+		prio_process
+	}
+};
+
+
+void continues_delimiter_range(int* start, int* end, char* src, char* search_delimiters){
+	*start = -1;
+	*end = -1;
+
+	for(int j = 0; j < strlen(src); j++){
+		for(int i = 0; i < strlen(search_delimiters); i++){
+			if(src[j] == search_delimiters[i]){
+				if(*start == -1){
+					*start = j;
+				} else {
+					*end = j;
+				}
+			}
+		}
+	}	
+}
+
+void add_sublist_entries(sublist_entries **head, char *entries){
+	sublist_entries *tmp = *head;
+
+	while(tmp->next != *head){
+		tmp = tmp->next;
+	}
+
+	tmp->next = malloc(sizeof(*head));
+
+	tmp->next->entries = malloc(strlen(entries));
+	strcpy(tmp->next->entries, entries);
+
+	tmp->next->next = *head;
+	tmp->next->prev = tmp;
+	(*head)->prev = tmp->next;
+}
+
+void update_sublist_entry(sublist_entries *node, char *entries){
+	free(node->entries);
+	node->entries = malloc(strlen(entries));
+	strcpy(node->entries, entries);
+}
+
+void process_init(sublist_entries **head, char* expr_keyname, char* expr_comp, char* expr_value, FILE *file) {
+	//TODO: Go through file and just read entire file into buffer
+
+	for(int i = 0; i < sizeof(keys)/sizeof(key_func_map); i++){
+		if(!strcmp(keys[i].name, expr_keyname)){
+			add_sublist_entries(head, keys[i].func(expr_comp, expr_value, str_from_file));
+			return;
+		}
+	}
+
+	//KEY NAME NOT FOUND
+}
+
+void process_entry(sublist_entries *node, char* expr_keyname, char* expr_comp, char *expr_value, FILE *file) {
+	for(int i = 0; i < sizeof(keys)/sizeof(key_func_map); i++){
+		if(!strcmp(keys[i].name, expr_keyname)){
+			update_sublist_entry(node, keys[i].func(expr_comp, expr_value, node->entries));
+			return;
+		}
+	}
+	//KEY NAME NOT FOUND
+}
+
 void filter_expr_file_offset(file_offset_list **fol_head, FILE *file, char *expr_filter){
-	// * Parse expr
-	// ** Tokenize and take values of
-	// ** If for example token 'DUE' and 'LT' found then use the value that is next to it and
-	// start running a function for it
-
-	/*
- 	* Build dynamic list of these 
- 	*/
-
-	//-fe "due>=3d|prio<B"
-	//-fe "due>=3d | prio<C & test=123 | a<123 | c=1"
-	// strtokr() -->
-	// 
-	// {due>=3d} |
-	// {prio<C, test=123} &
-	// {a=123} |
-	// {c=1}
-
 	char *copy = strdup(expr_filter);
 	char *str = expr_filter;
 	char *del = "|&";
+	char *comp_del = "><=!";
 	char *saveptr;
 	char last_del = 0;
 	char *subtoken = strtok_r(str, del, &saveptr);
+	sublist_entries *head = init_sublist_entries();
+
+	int and_counter = 1;
+
+	__asm__("int3");
 	for(;subtoken != NULL;){
 		char found_del = copy[subtoken-expr_filter+strlen(subtoken)];
-		if(found_del == '&'){
-			printf(" and neighbor %s\n", subtoken);	
-		}else if(found_del == '|'){
-			printf(" or neighbor %s\n", subtoken);
-		}else{
-			printf("%c -> %s\n", last_del, subtoken);
+		char *dest_buffer;
+		
+		int start = -1;
+		int end = -1;
+		char *found_comp;
+		continues_delimiter_range(&start, &end, subtoken, comp_del);
+		if(start != -1){
+			//ERROR: Could not find comp operator
+			
+		} else if(end != -1) {
+			found_comp = malloc(1);
+			strncpy(found_comp, &subtoken[start], 1);
+		} else {
+			found_comp = malloc(1 + end - start);
+			strncpy(found_comp, &subtoken[start], 1 + end - start);
+		}
+
+		char *expr_value;
+		char *expr_keyname = strtok_r(subtoken, comp_del, &expr_value);
+		
+		printf("%*s%s", and_counter, "+", subtoken);
+		if(found_del == '&' && and_counter == 1 || last_del == '|') { 
+			/*" - START NEW SUBLIST - "*/
+			process_init(&head, expr_keyname, found_comp, expr_value, file);
+		}
+		if(last_del == '&' && and_counter > 1) {
+			/*" - USE LAST SUBLIST - "*/
+			process_entry(head->prev, expr_keyname, found_comp, expr_value, file);
 		}
 		last_del = found_del;
+		if(last_del == '&') ++and_counter;
+		if(last_del == '|') and_counter = 1;
 		subtoken = strtok_r(NULL, del, &saveptr);
 	}
+	printf("MERGE ALL SUBLISTS TO ONE FINAL RESULT\n");
 }
 
 void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
@@ -378,12 +501,13 @@ void* show_tocdo(cli_cmd_group *m, cli_cmd_group *c, void *void_args){
 
 	cli_opt_list *search_opt = find_opt_name(c->opt_head, "--search");
 	cli_opt_list *filterexpr_opt = find_opt_name(c->opt_head, "--filterexpr");
-	if(search_opt->result) filter_str_file_offset(&fol, todo_file, search_opt->result->s);
 	if(filterexpr_opt->result) filter_expr_file_offset(&fol, todo_file, filterexpr_opt->result->s);
-	// --filterexp "due>=3d|prio<B"
 
-	rewind(todo_file);
-	print_file_offset(fol, todo_file);
+	if(search_opt->result){
+		filter_str_file_offset(&fol, todo_file, search_opt->result->s);
+		rewind(todo_file);
+		print_file_offset(fol, todo_file);
+	}
 
 }
 
